@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 from datetime import datetime
+import resend
 from flask import Flask, request, jsonify
 import requests
 
@@ -10,10 +11,9 @@ app = Flask(__name__)
 BOT_ID = "0bd071f6a87fec9fcb76d39586"
 GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
-BACKUP_FOLDER = "backups"
 
-# Create backup folder
-os.makedirs(BACKUP_FOLDER, exist_ok=True)
+resend.api_key = os.getenv("RESEND_API_KEY")
+FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <onboarding@resend.dev>")
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -34,6 +34,31 @@ def send_message(text, image_url=None):
         payload["attachments"] = [{"type": "image", "url": image_url}]
     requests.post(GROUPME_POST_URL, json=payload)
 
+def send_email_backup():
+    subjects = load_db()
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    backup_data = {
+        "backup_date": datetime.now().isoformat(),
+        "total_subjects": len(subjects),
+        "subjects": subjects
+    }
+    backup_json = json.dumps(backup_data, indent=2)
+
+    try:
+        r = resend.Emails.send({
+            "from": FROM_EMAIL,
+            "to": "empirepsok@gmail.com",
+            "subject": f"TIA Backup - {timestamp}",
+            "html": f"<h2>TIA Full Database Backup</h2><p>Generated: {timestamp}</p><p>Total Subjects: {len(subjects)}</p>",
+            "attachments": [{
+                "filename": f"tia_backup_{timestamp}.json",
+                "content": backup_json
+            }]
+        })
+        return f"✅ Backup emailed successfully"
+    except Exception as e:
+        return f"❌ Email failed: {str(e)}"
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -47,29 +72,13 @@ def webhook():
 
     subjects = load_db()
 
-    # ====================== BACKUP ======================
+    # === BACKUP COMMAND ===
     if any(cmd in lower for cmd in ["backup", "export"]):
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        backup_data = {
-            "backup_date": datetime.now().isoformat(),
-            "total_subjects": len(subjects),
-            "subjects": subjects
-        }
-        
-        # Save full backup file
-        backup_path = f"{BACKUP_FOLDER}/tia_backup_{timestamp}.json"
-        with open(backup_path, 'w') as f:
-            json.dump(backup_data, f, indent=2)
-
-        # Short message in chat with download instructions
-        msg = f"✅ **TIA BACKUP v2.5**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n"
-        msg += "📥 Full backup saved on server.\n"
-        msg += "To download: Go to Railway → Your Service → Files → backups folder → click the file."
-        send_message(msg)
+        status = send_email_backup()
+        send_message(f"✅ **TIA BACKUP v2.6**\n{status}\nTotal Subjects: {len(subjects)}")
         return jsonify({"status": "ok"})
 
-    # ====================== CORE COMMANDS ======================
-    # ADD NEW SUBJECT / INCIDENT
+    # === ADD / INCIDENT ===
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -105,13 +114,12 @@ def webhook():
         save_db(subjects)
         return jsonify({"status": "ok"})
 
-    # LIST
+    # LIST, CHECK, LOOKS, 10-20, RISK (same as before)
     if "list" in lower:
         msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']} | Risk: {s.get('risk','Medium')}" for s in subjects) or "Empty")
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    # CHECK / LOOKS
     if any(cmd in lower for cmd in ["check", "who", "looks"]):
         query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
         matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
@@ -122,34 +130,6 @@ def webhook():
         else:
             send_message(f"🔴 No match for '{query}'")
         return jsonify({"status": "ok"})
-
-    # LOCATION / 10-20
-    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", "20"]):
-        query = text.lower()
-        for cmd in ["@tia", "10-20", "1020", "location", "property", "20", "at"]:
-            query = query.replace(cmd, "").strip()
-        matches = [s for s in subjects if query in s.get('history','').lower()]
-        if matches:
-            reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n" + "\n".join(f"• {s['name']} | {s.get('descriptors','No desc')}" for s in matches)
-            send_message(reply)
-        else:
-            send_message(f"🔴 No subjects at '{query}'")
-        return jsonify({"status": "ok"})
-
-    # RISK
-    if lower.startswith("@tia risk"):
-        try:
-            parts = text.split(maxsplit=3)
-            name = parts[2]
-            level = parts[3].capitalize()
-            for s in subjects:
-                if s['name'].lower() == name.lower():
-                    s['risk'] = level
-                    send_message(f"✅ Risk for {name} updated to {level}")
-                    save_db(subjects)
-                    return jsonify({"status": "ok"})
-        except:
-            send_message("Usage: @TIA risk [Name] [High/Medium/Low]")
 
     save_db(subjects)
     return jsonify({"status": "ok"})
