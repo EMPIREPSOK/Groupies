@@ -42,11 +42,12 @@ def webhook():
     reply = "🔴 **TIA ACTIVE** ✅\n\n"
 
     if image_url or any(word in text for word in ["tia", "test", "check", "who", "subject", "photo"]):
-        reply += "✅ Message received!\n"
+        reply += "✅ Message & image received!\n"
         if image_url:
             reply += f"📸 Image URL: {image_url}\n\n"
-        reply += "Send subject info to add:\n"
-        reply += "Name: \nDOB: \nDate: \nLocation: \nOutcome: "
+        reply += "Ready to log new subject.\n"
+        reply += "Send details like:\n"
+        reply += "Name: Charles Jones\nDOB: 4-18-1991\nDate: Apr 26 2026\nLocation: Knollwood\nOutcome: Formal Trespass"
 
     send_message(reply)
     return jsonify({"status": "ok"})
