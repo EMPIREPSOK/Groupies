@@ -16,6 +16,7 @@ def init_db():
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     dob TEXT,
+                    descriptors TEXT,
                     history TEXT,
                     last_seen TEXT,
                     notes TEXT,
@@ -32,27 +33,29 @@ def send_message(text, image_url=None):
         payload["attachments"] = [{"type": "image", "url": image_url}]
     requests.post(GROUPME_POST_URL, json=payload)
 
-def save_subject(name, dob, date, location, outcome, photo_url=None):
+def save_subject(name, dob, descriptors, date, location, outcome, photo_url=None):
     subject_id = str(uuid.uuid4())[:8]
     history = f"{date} - {location} - {outcome}"
     
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
     c.execute('''INSERT INTO subjects 
-                 (id, name, dob, history, last_seen, notes, risk, photo_url)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-              (subject_id, name, dob, history, date, "Auto-logged by TIA", "Medium", photo_url))
+                 (id, name, dob, descriptors, history, last_seen, notes, risk, photo_url)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+              (subject_id, name, dob, descriptors, history, date, "Auto-logged by TIA", "Medium", photo_url))
     conn.commit()
     conn.close()
-    return name
 
-def find_subject(name):
+def find_subject(query):
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM subjects WHERE name LIKE ?", (f"%{name}%",))
-    row = c.fetchone()
+    # Search name + descriptors
+    c.execute("""SELECT * FROM subjects 
+                 WHERE name LIKE ? OR descriptors LIKE ?""", 
+              (f"%{query}%", f"%{query}%"))
+    rows = c.fetchall()
     conn.close()
-    return row
+    return rows
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -60,75 +63,63 @@ def webhook():
     if not data or data.get('sender_type') == 'bot':
         return jsonify({"status": "ok"})
 
-    text = data.get('text', '')
+    text = data.get('text', '').strip()
     attachments = data.get('attachments', [])
     image_url = attachments[0].get('url') if attachments else None
+    lower = text.lower()
 
-    lower_text = text.lower()
-
-    # === LOOKUP ===
-    if any(word in lower_text for word in ["check", "who", "lookup", "match"]):
-        search_name = text.replace("check", "").replace("who", "").replace("lookup", "").replace("match", "").strip()
-        subject = find_subject(search_name)
-        if subject and subject[7]:  # photo_url exists
-            reply = f"""🔴 **TIA MATCH FOUND**
-
-Name: {subject[1]}
-DOB: {subject[2]}
-
-History:
-• {subject[3]}
-
-Last Seen: {subject[4]}
-Notes: {subject[5]}
-Risk Level: {subject[6]}"""
-            send_message(reply, subject[7])  # Send original photo
+    # === LOOKUP COMMAND ===
+    if any(cmd in lower for cmd in ["check", "who", "lookup", "match"]):
+        query = text.replace("check", "").replace("who", "").replace("lookup", "").replace("match", "").strip()
+        if not query:
+            send_message("🔴 **TIA** — What name or descriptor do you want to check?")
             return jsonify({"status": "ok"})
-        elif subject:
-            send_message(f"""🔴 **TIA MATCH FOUND**
+
+        subjects = find_subject(query)
+        if subjects:
+            for subject in subjects:
+                reply = f"""🔴 **TIA MATCH FOUND**
 
 Name: {subject[1]}
 DOB: {subject[2]}
+Descriptors: {subject[3] or 'None'}
 
 History:
-• {subject[3]}
+• {subject[4]}
 
-Last Seen: {subject[4]}
-Notes: {subject[5]}
-Risk Level: {subject[6]}""")
+Last Seen: {subject[5]}
+Notes: {subject[6]}
+Risk Level: {subject[7]}"""
+                send_message(reply, subject[8])  # Send photo
         else:
-            send_message("🔴 **TIA** — No match found.\nUpload new subject details to add.")
+            send_message("🔴 **TIA** — No match found for that name or descriptor.")
 
     # === ADD NEW SUBJECT ===
-    elif any(word in lower_text for word in ["name:", "dob:", "date:"]) or image_url:
-        name = dob = date = location = outcome = "Unknown"
+    elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]) or ("add" in lower and image_url):
+        name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
             l = line.lower()
             if "name:" in l: name = line.split(":",1)[1].strip()
             if "dob:" in l: dob = line.split(":",1)[1].strip()
+            if "descriptors:" in l or "descriptor:" in l: descriptors = line.split(":",1)[1].strip()
             if "date:" in l: date = line.split(":",1)[1].strip()
             if "location:" in l: location = line.split(":",1)[1].strip()
             if "outcome:" in l: outcome = line.split(":",1)[1].strip()
 
-        save_subject(name, dob, date, location, outcome, image_url)
+        save_subject(name, dob, descriptors, date, location, outcome, image_url)
         
-        reply = f"""✅ **NEW SUBJECT ADDED**
+        send_message(f"""✅ **NEW SUBJECT ADDED TO TIA DATABASE**
 
-🔴 **TIA RECORD**
 Name: {name}
 DOB: {dob}
+Descriptors: {descriptors or 'None'}
 Date: {date}
 Location: {location}
 Outcome: {outcome}
 
-📸 Original photo saved.
-TIA will now show this photo on future lookups."""
+📸 Photo saved. TIA will now recognize this subject + descriptors.""")
 
-        send_message(reply)
-    
-    else:
-        send_message("🔴 **TIA ACTIVE** ✅\n\nPost photo + details or type `@TIA check [Name]`")
-
+    # Silent mode - no reply for random messages
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
