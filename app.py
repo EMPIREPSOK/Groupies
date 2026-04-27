@@ -53,6 +53,15 @@ def find_by_location(loc):
     conn.close()
     return rows
 
+def find_subject(query):
+    conn = sqlite3.connect('tia_subjects.db')
+    c = conn.cursor()
+    q = f"%{query}%"
+    c.execute("SELECT * FROM subjects WHERE name LIKE ? OR descriptors LIKE ?", (q, q))
+    rows = c.fetchall()
+    conn.close()
+    return rows
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -64,11 +73,22 @@ def webhook():
     image_url = attachments[0].get('url') if attachments else None
     lower = text.lower()
 
-    # === LOCATION / PROPERTY SEARCH (only if clear command) ===
-    if any(cmd in lower for cmd in ["location ", "property ", "at ", "subjects at"]):
+    # LIST ALL
+    if any(w in lower for w in ["list", "all", "show", "database"]):
+        conn = sqlite3.connect('tia_subjects.db')
+        c = conn.cursor()
+        c.execute("SELECT name, descriptors, last_seen FROM subjects")
+        rows = c.fetchall()
+        msg = "📋 **TIA Database**:\n" + "\n".join([f"• {r[0]} | {r[1]} | {r[2]}" for r in rows]) if rows else "Database empty."
+        send_message(msg)
+        return jsonify({"status": "ok"})
+
+    # 10-20 / LOCATION SEARCH (Very flexible)
+    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", " at "]) or ("20" in lower and len(text.split()) <= 5):
         query = text.lower()
-        for cmd in ["@tia", "location", "property", "at", "subjects at"]:
+        for cmd in ["@tia", "10-20", "1020", "location", "property", " at ", "check"]:
             query = query.replace(cmd, "").strip()
+        
         if query:
             subjects = find_by_location(query)
             if subjects:
@@ -80,7 +100,30 @@ def webhook():
                 send_message(f"🔴 **TIA** — No subjects found at '**{query}**'.")
             return jsonify({"status": "ok"})
 
-    # === NAME / DESCRIPTOR CHECK ===
+    # LOOKS / DESCRIPTOR
+    if "looks " in lower or "descriptor " in lower:
+        query = text.lower().replace("@tia", "").replace("looks", "").replace("descriptor", "").strip()
+        if query:
+            subjects = find_subject(query)
+            if subjects:
+                for s in subjects:
+                    reply = f"""🔴 **TIA MATCH FOUND**
+
+Name: {s[1]}
+DOB: {s[2]}
+Descriptors: {s[3] or 'None'}
+
+History:
+• {s[4]}
+
+Last Seen: {s[5]}
+Risk: {s[7]}"""
+                    send_message(reply, s[8])
+            else:
+                send_message(f"🔴 **TIA** — No match for looks '**{query}**'.")
+            return jsonify({"status": "ok"})
+
+    # NAME CHECK
     if any(cmd in lower for cmd in ["check ", "who ", "lookup ", "match "]):
         query = text.lower()
         for cmd in ["@tia", "check", "who", "lookup", "match"]:
@@ -88,13 +131,7 @@ def webhook():
         query = query.strip()
 
         if query:
-            conn = sqlite3.connect('tia_subjects.db')
-            c = conn.cursor()
-            q = f"%{query}%"
-            c.execute("SELECT * FROM subjects WHERE name LIKE ? OR descriptors LIKE ?", (q, q))
-            subjects = c.fetchall()
-            conn.close()
-
+            subjects = find_subject(query)
             if subjects:
                 for s in subjects:
                     reply = f"""🔴 **TIA MATCH FOUND**
@@ -112,7 +149,7 @@ Risk: {s[7]}"""
             else:
                 send_message(f"🔴 **TIA** — No match for '**{query}**'")
 
-    # === ADD NEW SUBJECT ===
+    # ADD SUBJECT
     elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
