@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import sqlite3
+import os
 
 app = Flask(__name__)
 
@@ -41,14 +42,15 @@ def webhook():
     reply = "🔴 **TIA ACTIVE** ✅\n\n"
 
     if image_url or any(word in text for word in ["tia", "test", "check", "who", "subject", "photo"]):
-        reply += "✅ Received your message!\n"
+        reply += "✅ Message received!\n"
         if image_url:
-            reply += f"📸 Image attached\n"
-        reply += "\nSend subject details to add to database:\n"
+            reply += f"📸 Image URL: {image_url}\n\n"
+        reply += "Send subject info to add:\n"
         reply += "Name: \nDOB: \nDate: \nLocation: \nOutcome: "
 
     send_message(reply)
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
