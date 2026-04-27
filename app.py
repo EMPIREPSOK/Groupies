@@ -64,32 +64,30 @@ def webhook():
     image_url = attachments[0].get('url') if attachments else None
     lower = text.lower()
 
-    # LOCATION SEARCH
-    if any(cmd in lower for cmd in ["location", "property", "at ", "check"]):
+    # === LOCATION / PROPERTY SEARCH (only if clear command) ===
+    if any(cmd in lower for cmd in ["location ", "property ", "at ", "subjects at"]):
         query = text.lower()
-        for cmd in ["@tia", "location", "property", "check", "at"]:
+        for cmd in ["@tia", "location", "property", "at", "subjects at"]:
             query = query.replace(cmd, "").strip()
-        
         if query:
             subjects = find_by_location(query)
             if subjects:
                 reply = f"🔴 **TIA — SUBJECTS AT {query.upper()}**\n\n"
                 for s in subjects:
-                    reply += f"• {s[1]} ({s[3] or 'No desc'})\n"
+                    reply += f"• {s[1]} | {s[3] or 'No desc'}\n"
                 send_message(reply)
             else:
                 send_message(f"🔴 **TIA** — No subjects found at '**{query}**'.")
             return jsonify({"status": "ok"})
 
-    # NAME / DESCRIPTOR CHECK
-    if any(cmd in lower for cmd in ["check", "who", "lookup", "match"]):
+    # === NAME / DESCRIPTOR CHECK ===
+    if any(cmd in lower for cmd in ["check ", "who ", "lookup ", "match "]):
         query = text.lower()
         for cmd in ["@tia", "check", "who", "lookup", "match"]:
             query = query.replace(cmd, "")
         query = query.strip()
 
         if query:
-            # (reuse same find_subject logic from before)
             conn = sqlite3.connect('tia_subjects.db')
             c = conn.cursor()
             q = f"%{query}%"
@@ -114,7 +112,7 @@ Risk: {s[7]}"""
             else:
                 send_message(f"🔴 **TIA** — No match for '**{query}**'")
 
-    # ADD SUBJECT
+    # === ADD NEW SUBJECT ===
     elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -127,7 +125,7 @@ Risk: {s[7]}"""
             if "outcome:" in l: outcome = line.split(":",1)[1].strip()
 
         save_subject(name, dob, descriptors, date, location, outcome, image_url)
-        send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}")
+        send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}\nLocation: {location}")
 
     return jsonify({"status": "ok"})
 
