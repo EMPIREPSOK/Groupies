@@ -1,10 +1,7 @@
 import os
 import json
 import uuid
-import smtplib
 from datetime import datetime, timedelta
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from flask import Flask, request, jsonify
 import requests
 
@@ -15,10 +12,10 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 LAST_BACKUP_FILE = "last_backup.txt"
 
-# Email settings from Railway Variables
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
+# Email temporarily disabled due to Railway SMTP block
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+# etc.
+
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -51,42 +48,6 @@ def send_message(text, image_url=None):
         payload["attachments"] = [{"type": "image", "url": image_url}]
     requests.post(GROUPME_POST_URL, json=payload)
 
-def send_email_backup():
-    subjects = load_db()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    backup_data = {
-        "backup_date": datetime.now().isoformat(),
-        "total_subjects": len(subjects),
-        "subjects": subjects
-    }
-    backup_json = json.dumps(backup_data, indent=2)
-
-    if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
-        return "❌ Email not configured in Railway Variables"
-
-    msg = MIMEMultipart()
-    msg['From'] = EMAIL_HOST_USER
-    msg['To'] = EMAIL_RECIPIENT
-    msg['Subject'] = f"TIA Auto Backup - {timestamp}"
-
-    body = f"TIA Full Database Backup\nAuto-generated: {timestamp}\nTotal Subjects: {len(subjects)}\n\nAttached is the complete JSON backup."
-    msg.attach(MIMEText(body, 'plain'))
-
-    attachment = MIMEText(backup_json, 'plain')
-    attachment.add_header('Content-Disposition', 'attachment', filename=f"tia_backup_{timestamp}.json")
-    msg.attach(attachment)
-
-    try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(EMAIL_HOST_USER, EMAIL_HOST_PASSWORD)
-        server.sendmail(EMAIL_HOST_USER, EMAIL_RECIPIENT.split(','), msg.as_string())
-        server.quit()
-        save_last_backup_time()
-        return f"✅ Auto backup emailed ({len(subjects)} subjects)"
-    except Exception as e:
-        return f"❌ Auto email failed: {str(e)}"
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
@@ -100,49 +61,38 @@ def webhook():
 
     subjects = load_db()
 
-    # === AUTO BACKUP EVERY 3 DAYS ===
-    last_backup = get_last_backup_time()
-    if datetime.now() - last_backup > timedelta(days=3):
-        auto_status = send_email_backup()
-        send_message(f"🛡️ **TIA AUTO BACKUP**\n{auto_status}")
-
-    # === MANUAL EMAIL BACKUP ===
-    if "backup" in lower and "email" in lower:
-        manual_status = send_email_backup()
-        send_message(f"✅ **TIA MANUAL EMAIL BACKUP**\n{manual_status}")
-        return jsonify({"status": "ok"})
-
-    # === REGULAR JSON BACKUP ===
-    if any(cmd in lower for cmd in ["backup", "export"]) and "email" not in lower:
+    # === MANUAL JSON BACKUP (always works) ===
+    if any(cmd in lower for cmd in ["backup", "export"]):
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        backup_data = {"backup_date": datetime.now().isoformat(), "total_subjects": len(subjects), "subjects": subjects}
+        backup_data = {
+            "backup_date": datetime.now().isoformat(),
+            "total_subjects": len(subjects),
+            "subjects": subjects
+        }
         backup_json = json.dumps(backup_data, indent=2)
-        send_message(f"✅ **TIA BACKUP v2.3**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n```json\n{backup_json}\n```")
+        send_message(f"✅ **TIA BACKUP v2.4**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n```json\n{backup_json}\n```")
+        save_last_backup_time()
         return jsonify({"status": "ok"})
 
     # ====================== CORE TIA COMMANDS ======================
-    # ADD NEW SUBJECT / INCIDENT
+    # ADD / NEW INCIDENT
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
             l = line.lower()
             if "name:" in l: name = line.split(":", 1)[1].strip()
             if "dob:" in l: dob = line.split(":", 1)[1].strip()
-            if "descriptors:" in l or "descriptor:" in l: descriptors = line.split(":", 1)[1].strip()
+            if any(d in l for d in ["descriptors:", "descriptor:"]): descriptors = line.split(":", 1)[1].strip()
             if "date:" in l: date = line.split(":", 1)[1].strip()
             if "location:" in l: location = line.split(":", 1)[1].strip()
             if "outcome:" in l: outcome = line.split(":", 1)[1].strip()
 
-        existing = next((s for s in subjects if s.get('name', '').lower() == name.lower()), None)
+        existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
         if existing:
             new_entry = f"{date} - {location} - {outcome}"
-            if existing.get('history'):
-                existing['history'] += f"\n• {new_entry}"
-            else:
-                existing['history'] = new_entry
+            existing['history'] = existing.get('history', '') + f"\n• {new_entry}"
             existing['last_seen'] = date
-            if image_url:
-                existing['photo_url'] = image_url
+            if image_url: existing['photo_url'] = image_url
             send_message(f"✅ **NEW INCIDENT ADDED** for {name}")
         else:
             new_subject = {
@@ -163,16 +113,11 @@ def webhook():
 
     # LIST
     if "list" in lower:
-        if not subjects:
-            send_message("📋 **TIA Database**:\nEmpty")
-        else:
-            msg = "📋 **TIA Database**:\n"
-            for s in subjects:
-                msg += f"• {s['name']} | Risk: {s.get('risk','Medium')}\n"
-            send_message(msg)
+        msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']} | Risk: {s.get('risk','Medium')}" for s in subjects) or "Empty")
+        send_message(msg)
         return jsonify({"status": "ok"})
 
-    # CHECK / LOOKS / NAME SEARCH
+    # CHECK / LOOKS
     if any(cmd in lower for cmd in ["check", "who", "looks"]):
         query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
         matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
@@ -187,33 +132,30 @@ def webhook():
     # LOCATION / 10-20
     if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", "20"]):
         query = text.lower()
-        for cmd in ["@tia", "10-20", "1020", "location", "property", "20"]:
+        for cmd in ["@tia", "10-20", "1020", "location", "property", "20", "at"]:
             query = query.replace(cmd, "").strip()
         matches = [s for s in subjects if query in s.get('history','').lower()]
         if matches:
-            reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n"
-            for s in matches:
-                reply += f"• {s['name']} | {s.get('descriptors','No desc')}\n"
+            reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n" + "\n".join(f"• {s['name']} | {s.get('descriptors','No desc')}" for s in matches)
             send_message(reply)
         else:
             send_message(f"🔴 No subjects at '{query}'")
         return jsonify({"status": "ok"})
 
-    # RISK UPDATE
-    if "risk" in lower:
-        parts = text.split()
+    # RISK
+    if lower.startswith("@tia risk"):
         try:
-            name = parts[1]
-            level = parts[2].capitalize()
+            parts = text.split(maxsplit=3)
+            name = parts[2]
+            level = parts[3].capitalize()
             for s in subjects:
                 if s['name'].lower() == name.lower():
                     s['risk'] = level
-                    send_message(f"✅ Risk updated for {name} → {level}")
+                    send_message(f"✅ Risk for {name} updated to {level}")
                     save_db(subjects)
                     return jsonify({"status": "ok"})
         except:
-            pass
-        send_message("❌ Risk command: @TIA risk [Name] [High/Medium/Low]")
+            send_message("Usage: @TIA risk [Name] [High/Medium/Low]")
 
     save_db(subjects)
     return jsonify({"status": "ok"})
