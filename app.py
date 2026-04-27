@@ -15,11 +15,10 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 LAST_BACKUP_FILE = "last_backup.txt"
 
-# === EMAIL SETTINGS (Railway Variables) ===
+# Email settings from Railway Variables
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
-
 def load_db():
     if os.path.exists(DB_FILE):
         try:
