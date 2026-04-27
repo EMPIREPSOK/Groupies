@@ -42,7 +42,7 @@ def webhook():
 
     subjects = load_db()
 
-    # === ADD SUBJECT ===
+    # === ADD NEW INCIDENT (supports multiple history) ===
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -54,53 +54,57 @@ def webhook():
             if "location:" in l: location = line.split(":",1)[1].strip()
             if "outcome:" in l: outcome = line.split(":",1)[1].strip()
 
-        new_subject = {
-            "id": str(uuid.uuid4())[:8],
-            "name": name,
-            "dob": dob,
-            "descriptors": descriptors,
-            "history": f"{date} - {location} - {outcome}",
-            "last_seen": date,
-            "photo_url": image_url
-        }
-        subjects.append(new_subject)
-        save_db(subjects)
+        # Find existing subject or create new
+        existing = next((s for s in subjects if s['name'].lower() == name.lower()), None)
+        if existing:
+            new_entry = f"{date} - {location} - {outcome}"
+            existing['history'] = f"{existing.get('history','')}\n• {new_entry}" if existing.get('history') else new_entry
+            existing['last_seen'] = date
+            if image_url:
+                existing['photo_url'] = image_url
+            send_message(f"✅ **NEW INCIDENT ADDED** for {name}\nLocation: {location}")
+        else:
+            new_subject = {
+                "id": str(uuid.uuid4())[:8],
+                "name": name,
+                "dob": dob,
+                "descriptors": descriptors,
+                "history": f"{date} - {location} - {outcome}",
+                "last_seen": date,
+                "photo_url": image_url,
+                "risk": "Medium"
+            }
+            subjects.append(new_subject)
+            send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}\nLocation: {location}")
 
-        send_message(f"✅ **SUBJECT SAVED**\nName: {name}\nLocation: {location}\nTotal: {len(subjects)}")
+        save_db(subjects)
         return jsonify({"status": "ok"})
 
     # === LIST ===
     if any(w in lower for w in ["list", "all", "show", "database"]):
         if subjects:
-            msg = f"📋 **TIA Database** ({len(subjects)} total):\n"
+            msg = f"📋 **TIA Database** ({len(subjects)} total):\n\n"
             for s in subjects:
-                msg += f"• {s['name']} | {s.get('descriptors','None')}\n"
+                msg += f"• {s['name']} | Risk: {s.get('risk','Medium')}\n"
         else:
             msg = "Database empty."
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    # === 10-20 / LOCATION SEARCH (Improved) ===
-    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property"]) or lower.startswith("20 "):
-        query = text.lower()
-        for cmd in ["@tia", "10-20", "1020", "location", "property", "check"]:
-            query = query.replace(cmd, "").strip()
-        
-        if query:
-            matches = []
+    # === RISK LEVEL ===
+    if "risk " in lower:
+        parts = text.split()
+        if len(parts) >= 3:
+            risk_level = parts[-1].capitalize()
+            name_query = " ".join(parts[2:-1]).lower()
             for s in subjects:
-                history_lower = s.get('history', '').lower()
-                if query in history_lower or query in s.get('last_seen','').lower():
-                    matches.append(s)
-            
-            if matches:
-                reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n"
-                for s in matches:
-                    reply += f"• {s['name']} | {s.get('descriptors','No desc')}\n"
-                send_message(reply)
-            else:
-                send_message(f"🔴 **TIA** — No subjects found at '**{query}**'.")
-            return jsonify({"status": "ok"})
+                if name_query in s['name'].lower():
+                    s['risk'] = risk_level
+                    save_db(subjects)
+                    send_message(f"✅ Risk for **{s['name']}** updated to **{risk_level}**")
+                    return jsonify({"status": "ok"})
+            send_message("🔴 Subject not found.")
+        return jsonify({"status": "ok"})
 
     # === NAME / LOOKS CHECK ===
     if any(cmd in lower for cmd in ["check ", "looks ", "who ", "match "]):
@@ -116,19 +120,22 @@ def webhook():
 Name: {s['name']}
 DOB: {s.get('dob','Unknown')}
 Descriptors: {s.get('descriptors','None')}
+Risk: {s.get('risk','Medium')}
 
 History:
-• {s.get('history','')}
-
-Last Seen: {s.get('last_seen','')}
-Risk: Medium"""
+{s.get('history','No history')}
+"""
                     send_message(reply, s.get('photo_url'))
             else:
                 send_message(f"🔴 **TIA** — No match for '**{query}**'")
         return jsonify({"status": "ok"})
 
-    return jsonify({"status": "ok"})
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    # === LOCATION SEARCH ===
+    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property"]) or ("20" in lower and len(text.split()) <= 6):
+        query = text.lower()
+        for cmd in ["@tia", "10-20", "1020", "location", "property", " at ", "check"]:
+            query = query.replace(cmd, "").strip()
+        if query:
+            matches = [s for s in subjects if query in s.get('history','').lower()]
+            if matches:
+                reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches
