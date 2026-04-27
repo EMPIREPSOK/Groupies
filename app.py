@@ -37,11 +37,10 @@ def send_message(text, image_url=None):
 def save_subject(name, dob, descriptors, date, location, outcome, photo_url=None):
     subject_id = str(uuid.uuid4())[:8]
     history = f"{date} - {location} - {outcome}"
-    
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
     c.execute('''INSERT INTO subjects VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-              (subject_id, name.strip(), dob, descriptors or "", history, date, "Auto-logged", "Medium", photo_url))
+              (subject_id, name.strip(), dob, descriptors or "", history, date, "Auto-logged by TIA", "Medium", photo_url))
     conn.commit()
     conn.close()
 
@@ -66,22 +65,26 @@ def webhook():
     image_url = attachments[0].get('url') if attachments else None
     lower = text.lower()
 
-    # DEBUG: Show all records
-    if "list" in lower or "all" in lower:
+    # LIST ALL
+    if any(w in lower for w in ["list", "all", "show db"]):
         conn = sqlite3.connect('tia_subjects.db')
         c = conn.cursor()
         c.execute("SELECT name, descriptors FROM subjects")
         rows = c.fetchall()
-        conn.close()
-        msg = "📋 **TIA Database**:\n" + "\n".join([f"• {r[0]} | {r[1]}" for r in rows]) if rows else "Database empty."
+        msg = "📋 **TIA Database**:\n" + "\n".join([f"• {r[0]} | {r[1]}" for r in rows]) if rows else "Empty"
         send_message(msg)
         return jsonify({"status": "ok"})
 
     # LOOKUP
     if any(cmd in lower for cmd in ["check", "who", "lookup", "match"]):
-        query = text.replace("@tia", "").replace("check", "").replace("who", "").replace("lookup", "").replace("match", "").strip()
+        # Better cleaning
+        query = text.lower()
+        for cmd in ["@tia", "check", "who", "lookup", "match"]:
+            query = query.replace(cmd, "")
+        query = query.strip()
+        
         if not query:
-            send_message("🔴 **TIA** — What to check?")
+            send_message("🔴 **TIA** — What name/descriptor?")
             return jsonify({"status": "ok"})
 
         subjects = find_subject(query)
@@ -100,9 +103,9 @@ Last Seen: {s[5]}
 Risk: {s[7]}"""
                 send_message(reply, s[8])
         else:
-            send_message(f"🔴 **TIA** — No match for '**{query}**'.")
+            send_message(f"🔴 **TIA** — No match for '**{query}**'")
 
-    # ADD
+    # ADD SUBJECT
     elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
