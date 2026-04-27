@@ -26,8 +26,10 @@ def init_db():
 
 init_db()
 
-def send_message(text):
+def send_message(text, image_url=None):
     payload = {"bot_id": BOT_ID, "text": text}
+    if image_url:
+        payload["attachments"] = [{"type": "image", "url": image_url}]
     requests.post(GROUPME_POST_URL, json=payload)
 
 def save_subject(name, dob, date, location, outcome, photo_url=None):
@@ -64,11 +66,11 @@ def webhook():
 
     lower_text = text.lower()
 
-    # === LOOKUP MODE ===
+    # === LOOKUP ===
     if any(word in lower_text for word in ["check", "who", "lookup", "match"]):
-        name = text.split()[-1] if len(text.split()) > 1 else text
-        subject = find_subject(name)
-        if subject:
+        search_name = text.replace("check", "").replace("who", "").replace("lookup", "").replace("match", "").strip()
+        subject = find_subject(search_name)
+        if subject and subject[7]:  # photo_url exists
             reply = f"""🔴 **TIA MATCH FOUND**
 
 Name: {subject[1]}
@@ -80,39 +82,53 @@ History:
 Last Seen: {subject[4]}
 Notes: {subject[5]}
 Risk Level: {subject[6]}"""
+            send_message(reply, subject[7])  # Send original photo
+            return jsonify({"status": "ok"})
+        elif subject:
+            send_message(f"""🔴 **TIA MATCH FOUND**
+
+Name: {subject[1]}
+DOB: {subject[2]}
+
+History:
+• {subject[3]}
+
+Last Seen: {subject[4]}
+Notes: {subject[5]}
+Risk Level: {subject[6]}""")
         else:
-            reply = "🔴 **TIA** — No match found in database.\nUpload new subject details to add."
-    
-    # === ADD NEW SUBJECT MODE ===
+            send_message("🔴 **TIA** — No match found.\nUpload new subject details to add.")
+
+    # === ADD NEW SUBJECT ===
     elif any(word in lower_text for word in ["name:", "dob:", "date:"]) or image_url:
-        # Simple parsing (you can send in any order)
         name = dob = date = location = outcome = "Unknown"
         for line in text.splitlines():
-            if "name:" in line.lower(): name = line.split(":",1)[1].strip()
-            if "dob:" in line.lower(): dob = line.split(":",1)[1].strip()
-            if "date:" in line.lower(): date = line.split(":",1)[1].strip()
-            if "location:" in line.lower(): location = line.split(":",1)[1].strip()
-            if "outcome:" in line.lower(): outcome = line.split(":",1)[1].strip()
+            l = line.lower()
+            if "name:" in l: name = line.split(":",1)[1].strip()
+            if "dob:" in l: dob = line.split(":",1)[1].strip()
+            if "date:" in l: date = line.split(":",1)[1].strip()
+            if "location:" in l: location = line.split(":",1)[1].strip()
+            if "outcome:" in l: outcome = line.split(":",1)[1].strip()
 
         save_subject(name, dob, date, location, outcome, image_url)
         
-        reply = f"""✅ **NEW SUBJECT ADDED TO DATABASE**
+        reply = f"""✅ **NEW SUBJECT ADDED**
 
 🔴 **TIA RECORD**
-
 Name: {name}
 DOB: {dob}
 Date: {date}
 Location: {location}
 Outcome: {outcome}
 
-📸 Photo saved.
-TIA will now recognize this subject in future posts."""
+📸 Original photo saved.
+TIA will now show this photo on future lookups."""
 
+        send_message(reply)
+    
     else:
-        reply = "🔴 **TIA ACTIVE** ✅\n\nSend a photo + details or type `check [name]`"
+        send_message("🔴 **TIA ACTIVE** ✅\n\nPost photo + details or type `@TIA check [Name]`")
 
-    send_message(reply)
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
