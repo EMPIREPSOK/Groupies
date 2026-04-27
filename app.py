@@ -12,7 +12,9 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 def init_db():
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS subjects (
+    # Drop old table to fix schema issues
+    c.execute("DROP TABLE IF EXISTS subjects")
+    c.execute('''CREATE TABLE subjects (
                     id TEXT PRIMARY KEY,
                     name TEXT,
                     dob TEXT,
@@ -42,17 +44,16 @@ def save_subject(name, dob, descriptors, date, location, outcome, photo_url=None
     c.execute('''INSERT INTO subjects 
                  (id, name, dob, descriptors, history, last_seen, notes, risk, photo_url)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-              (subject_id, name, dob, descriptors, history, date, "Auto-logged by TIA", "Medium", photo_url))
+              (subject_id, name.strip(), dob, descriptors, history, date, "Auto-logged by TIA", "Medium", photo_url))
     conn.commit()
     conn.close()
 
 def find_subject(query):
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
-    # Search name + descriptors
+    q = f"%{query}%"
     c.execute("""SELECT * FROM subjects 
-                 WHERE name LIKE ? OR descriptors LIKE ?""", 
-              (f"%{query}%", f"%{query}%"))
+                 WHERE name LIKE ? OR descriptors LIKE ? OR id LIKE ?""", (q, q, q))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -68,34 +69,33 @@ def webhook():
     image_url = attachments[0].get('url') if attachments else None
     lower = text.lower()
 
-    # === LOOKUP COMMAND ===
+    # LOOKUP
     if any(cmd in lower for cmd in ["check", "who", "lookup", "match"]):
         query = text.replace("check", "").replace("who", "").replace("lookup", "").replace("match", "").strip()
         if not query:
-            send_message("🔴 **TIA** — What name or descriptor do you want to check?")
+            send_message("🔴 **TIA** — Need a name or descriptor.")
             return jsonify({"status": "ok"})
 
         subjects = find_subject(query)
         if subjects:
-            for subject in subjects:
+            for s in subjects:
                 reply = f"""🔴 **TIA MATCH FOUND**
 
-Name: {subject[1]}
-DOB: {subject[2]}
-Descriptors: {subject[3] or 'None'}
+Name: {s[1]}
+DOB: {s[2]}
+Descriptors: {s[3] or 'None'}
 
 History:
-• {subject[4]}
+• {s[4]}
 
-Last Seen: {subject[5]}
-Notes: {subject[6]}
-Risk Level: {subject[7]}"""
-                send_message(reply, subject[8])  # Send photo
+Last Seen: {s[5]}
+Risk Level: {s[7]}"""
+                send_message(reply, s[8])
         else:
-            send_message("🔴 **TIA** — No match found for that name or descriptor.")
+            send_message(f"🔴 **TIA** — No match for '**{query}**'.")
 
-    # === ADD NEW SUBJECT ===
-    elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]) or ("add" in lower and image_url):
+    # ADD SUBJECT
+    elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
             l = line.lower()
@@ -108,18 +108,16 @@ Risk Level: {subject[7]}"""
 
         save_subject(name, dob, descriptors, date, location, outcome, image_url)
         
-        send_message(f"""✅ **NEW SUBJECT ADDED TO TIA DATABASE**
+        send_message(f"""✅ **NEW SUBJECT ADDED**
 
 Name: {name}
-DOB: {dob}
 Descriptors: {descriptors or 'None'}
 Date: {date}
 Location: {location}
 Outcome: {outcome}
 
-📸 Photo saved. TIA will now recognize this subject + descriptors.""")
+📸 Photo saved.""")
 
-    # Silent mode - no reply for random messages
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
