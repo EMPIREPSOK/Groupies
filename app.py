@@ -42,7 +42,7 @@ def webhook():
 
     subjects = load_db()
 
-    # DEBUG ADD
+    # === ADD SUBJECT ===
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -66,13 +66,13 @@ def webhook():
         subjects.append(new_subject)
         save_db(subjects)
 
-        send_message(f"✅ **SUBJECT SAVED**\nName: {name}\nLocation: {location}\nTotal subjects now: {len(subjects)}")
+        send_message(f"✅ **SUBJECT SAVED**\nName: {name}\nLocation: {location}\nTotal in DB: {len(subjects)}")
         return jsonify({"status": "ok"})
 
-    # LIST
+    # === LIST ALL ===
     if any(w in lower for w in ["list", "all", "show", "database"]):
         if subjects:
-            msg = "📋 **TIA Database** (" + str(len(subjects)) + " subjects):\n"
+            msg = f"📋 **TIA Database** ({len(subjects)} subjects):\n"
             for s in subjects:
                 msg += f"• {s['name']} | {s.get('descriptors','None')}\n"
         else:
@@ -80,24 +80,24 @@ def webhook():
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    # LOCATION
-    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property"]):
+    # === LOCATION / 10-20 SEARCH ===
+    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", " at "]) or ("20" in lower and len(text.split()) <= 6):
         query = text.lower()
-        for cmd in ["@tia", "10-20", "1020", "location", "property"]:
+        for cmd in ["@tia", "10-20", "1020", "location", "property", " at ", "check"]:
             query = query.replace(cmd, "").strip()
         if query:
-            matches = [s for s in subjects if query.lower() in s.get('history','').lower() or query.lower() in s.get('last_seen','').lower()]
+            matches = [s for s in subjects if query in s.get('history','').lower() or query in s.get('last_seen','').lower()]
             if matches:
                 reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n"
                 for s in matches:
-                    reply += f"• {s['name']}\n"
+                    reply += f"• {s['name']} | {s.get('descriptors','No desc')}\n"
                 send_message(reply)
             else:
-                send_message(f"🔴 No subjects at '**{query}**'")
-        return jsonify({"status": "ok"})
+                send_message(f"🔴 **TIA** — No subjects at '**{query}**'.")
+            return jsonify({"status": "ok"})
 
-    # CHECK / LOOKS
-    if any(cmd in lower for cmd in ["check", "looks", "who", "match"]):
+    # === NAME / LOOKS CHECK ===
+    if any(cmd in lower for cmd in ["check ", "looks ", "who ", "match "]):
         query = text.lower()
         for cmd in ["@tia", "check", "looks", "who", "match"]:
             query = query.replace(cmd, "").strip()
@@ -108,12 +108,17 @@ def webhook():
                     reply = f"""🔴 **TIA MATCH FOUND**
 
 Name: {s['name']}
+DOB: {s.get('dob','Unknown')}
 Descriptors: {s.get('descriptors','None')}
-History: {s.get('history','')}
-"""
+
+History:
+• {s.get('history','')}
+
+Last Seen: {s.get('last_seen','')}
+Risk: Medium"""
                     send_message(reply, s.get('photo_url'))
             else:
-                send_message(f"🔴 No match for '**{query}**'")
+                send_message(f"🔴 **TIA** — No match for '**{query}**'")
         return jsonify({"status": "ok"})
 
     return jsonify({"status": "ok"})
