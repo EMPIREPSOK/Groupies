@@ -12,6 +12,7 @@ BOT_ID = "0bd071f6a87fec9fcb76d39586"
 GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 
+# Official Resend setup
 resend.api_key = os.getenv("RESEND_API_KEY")
 FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <onboarding@resend.dev>")
 
@@ -49,7 +50,12 @@ def send_email_backup():
             "from": FROM_EMAIL,
             "to": "empirepsok@gmail.com",
             "subject": f"TIA Backup - {timestamp}",
-            "html": f"<h2>TIA Full Database Backup</h2><p>Generated: {timestamp}</p><p>Total Subjects: {len(subjects)}</p>",
+            "html": f"""
+                <h2>TIA Full Database Backup</h2>
+                <p><strong>Generated:</strong> {timestamp}</p>
+                <p><strong>Total Subjects:</strong> {len(subjects)}</p>
+                <p>Full backup attached as JSON file.</p>
+            """,
             "attachments": [{
                 "filename": f"tia_backup_{timestamp}.json",
                 "content": backup_json
@@ -72,13 +78,13 @@ def webhook():
 
     subjects = load_db()
 
-    # === BACKUP COMMAND ===
+    # BACKUP
     if any(cmd in lower for cmd in ["backup", "export"]):
         status = send_email_backup()
         send_message(f"✅ **TIA BACKUP v2.6**\n{status}\nTotal Subjects: {len(subjects)}")
         return jsonify({"status": "ok"})
 
-    # === ADD / INCIDENT ===
+    # ADD / NEW INCIDENT
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -114,12 +120,13 @@ def webhook():
         save_db(subjects)
         return jsonify({"status": "ok"})
 
-    # LIST, CHECK, LOOKS, 10-20, RISK (same as before)
+    # LIST
     if "list" in lower:
         msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']} | Risk: {s.get('risk','Medium')}" for s in subjects) or "Empty")
         send_message(msg)
         return jsonify({"status": "ok"})
 
+    # CHECK / LOOKS
     if any(cmd in lower for cmd in ["check", "who", "looks"]):
         query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
         matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
