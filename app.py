@@ -44,12 +44,11 @@ def save_subject(name, dob, descriptors, date, location, outcome, photo_url=None
     conn.commit()
     conn.close()
 
-def find_subject(query):
+def find_by_location(loc):
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
-    q = f"%{query}%"
-    c.execute("""SELECT * FROM subjects 
-                 WHERE name LIKE ? OR descriptors LIKE ?""", (q, q))
+    q = f"%{loc}%"
+    c.execute("SELECT * FROM subjects WHERE history LIKE ?", (q,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -65,32 +64,42 @@ def webhook():
     image_url = attachments[0].get('url') if attachments else None
     lower = text.lower()
 
-    # LIST ALL
-    if any(w in lower for w in ["list", "all", "show db"]):
-        conn = sqlite3.connect('tia_subjects.db')
-        c = conn.cursor()
-        c.execute("SELECT name, descriptors FROM subjects")
-        rows = c.fetchall()
-        msg = "📋 **TIA Database**:\n" + "\n".join([f"• {r[0]} | {r[1]}" for r in rows]) if rows else "Empty"
-        send_message(msg)
-        return jsonify({"status": "ok"})
+    # LOCATION SEARCH
+    if any(cmd in lower for cmd in ["location", "property", "at ", "check"]):
+        query = text.lower()
+        for cmd in ["@tia", "location", "property", "check", "at"]:
+            query = query.replace(cmd, "").strip()
+        
+        if query:
+            subjects = find_by_location(query)
+            if subjects:
+                reply = f"🔴 **TIA — SUBJECTS AT {query.upper()}**\n\n"
+                for s in subjects:
+                    reply += f"• {s[1]} ({s[3] or 'No desc'})\n"
+                send_message(reply)
+            else:
+                send_message(f"🔴 **TIA** — No subjects found at '**{query}**'.")
+            return jsonify({"status": "ok"})
 
-    # LOOKUP
+    # NAME / DESCRIPTOR CHECK
     if any(cmd in lower for cmd in ["check", "who", "lookup", "match"]):
-        # Better cleaning
         query = text.lower()
         for cmd in ["@tia", "check", "who", "lookup", "match"]:
             query = query.replace(cmd, "")
         query = query.strip()
-        
-        if not query:
-            send_message("🔴 **TIA** — What name/descriptor?")
-            return jsonify({"status": "ok"})
 
-        subjects = find_subject(query)
-        if subjects:
-            for s in subjects:
-                reply = f"""🔴 **TIA MATCH FOUND**
+        if query:
+            # (reuse same find_subject logic from before)
+            conn = sqlite3.connect('tia_subjects.db')
+            c = conn.cursor()
+            q = f"%{query}%"
+            c.execute("SELECT * FROM subjects WHERE name LIKE ? OR descriptors LIKE ?", (q, q))
+            subjects = c.fetchall()
+            conn.close()
+
+            if subjects:
+                for s in subjects:
+                    reply = f"""🔴 **TIA MATCH FOUND**
 
 Name: {s[1]}
 DOB: {s[2]}
@@ -101,9 +110,9 @@ History:
 
 Last Seen: {s[5]}
 Risk: {s[7]}"""
-                send_message(reply, s[8])
-        else:
-            send_message(f"🔴 **TIA** — No match for '**{query}**'")
+                    send_message(reply, s[8])
+            else:
+                send_message(f"🔴 **TIA** — No match for '**{query}**'")
 
     # ADD SUBJECT
     elif any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
@@ -118,7 +127,7 @@ Risk: {s[7]}"""
             if "outcome:" in l: outcome = line.split(":",1)[1].strip()
 
         save_subject(name, dob, descriptors, date, location, outcome, image_url)
-        send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}\nDescriptors: {descriptors or 'None'}")
+        send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}")
 
     return jsonify({"status": "ok"})
 
