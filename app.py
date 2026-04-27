@@ -15,10 +15,11 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 LAST_BACKUP_FILE = "last_backup.txt"
 
-# Email settings (Railway Variables)
-EMAIL_HOST_USER = os.getenv("empirepsreport@gmail.com")
-EMAIL_HOST_PASSWORD = os.getenv("xkex dgbn xseq pvui")
-EMAIL_RECIPIENT = os.getenv("empirepsok@gmail.com")
+# === EMAIL SETTINGS (Railway Variables) ===
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
+
 def load_db():
     if os.path.exists(DB_FILE):
         try:
@@ -39,7 +40,7 @@ def get_last_backup_time():
                 return datetime.fromisoformat(f.read().strip())
         except:
             pass
-    return datetime.now() - timedelta(days=10)  # Force first backup
+    return datetime.now() - timedelta(days=10)
 
 def save_last_backup_time():
     with open(LAST_BACKUP_FILE, 'w') as f:
@@ -62,7 +63,7 @@ def send_email_backup():
     backup_json = json.dumps(backup_data, indent=2)
 
     if not EMAIL_HOST_USER or not EMAIL_HOST_PASSWORD:
-        return "❌ Email not configured"
+        return "❌ Email not configured in Railway Variables"
 
     msg = MIMEMultipart()
     msg['From'] = EMAIL_HOST_USER
@@ -112,7 +113,7 @@ def webhook():
         send_message(f"✅ **TIA MANUAL EMAIL BACKUP**\n{manual_status}")
         return jsonify({"status": "ok"})
 
-    # === REGULAR BACKUP (JSON in chat) ===
+    # === REGULAR JSON BACKUP ===
     if any(cmd in lower for cmd in ["backup", "export"]) and "email" not in lower:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         backup_data = {"backup_date": datetime.now().isoformat(), "total_subjects": len(subjects), "subjects": subjects}
@@ -120,7 +121,100 @@ def webhook():
         send_message(f"✅ **TIA BACKUP v2.3**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n```json\n{backup_json}\n```")
         return jsonify({"status": "ok"})
 
-    # === PASTE ALL YOUR PREVIOUS COMMANDS HERE (add, list, check, looks, 10-20, risk) ===
+    # ====================== CORE TIA COMMANDS ======================
+    # ADD NEW SUBJECT / INCIDENT
+    if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
+        name = dob = descriptors = date = location = outcome = "Unknown"
+        for line in text.splitlines():
+            l = line.lower()
+            if "name:" in l: name = line.split(":", 1)[1].strip()
+            if "dob:" in l: dob = line.split(":", 1)[1].strip()
+            if "descriptors:" in l or "descriptor:" in l: descriptors = line.split(":", 1)[1].strip()
+            if "date:" in l: date = line.split(":", 1)[1].strip()
+            if "location:" in l: location = line.split(":", 1)[1].strip()
+            if "outcome:" in l: outcome = line.split(":", 1)[1].strip()
+
+        existing = next((s for s in subjects if s.get('name', '').lower() == name.lower()), None)
+        if existing:
+            new_entry = f"{date} - {location} - {outcome}"
+            if existing.get('history'):
+                existing['history'] += f"\n• {new_entry}"
+            else:
+                existing['history'] = new_entry
+            existing['last_seen'] = date
+            if image_url:
+                existing['photo_url'] = image_url
+            send_message(f"✅ **NEW INCIDENT ADDED** for {name}")
+        else:
+            new_subject = {
+                "id": str(uuid.uuid4())[:8],
+                "name": name,
+                "dob": dob,
+                "descriptors": descriptors,
+                "history": f"{date} - {location} - {outcome}",
+                "last_seen": date,
+                "photo_url": image_url,
+                "risk": "Medium"
+            }
+            subjects.append(new_subject)
+            send_message(f"✅ **NEW SUBJECT ADDED**\nName: {name}")
+
+        save_db(subjects)
+        return jsonify({"status": "ok"})
+
+    # LIST
+    if "list" in lower:
+        if not subjects:
+            send_message("📋 **TIA Database**:\nEmpty")
+        else:
+            msg = "📋 **TIA Database**:\n"
+            for s in subjects:
+                msg += f"• {s['name']} | Risk: {s.get('risk','Medium')}\n"
+            send_message(msg)
+        return jsonify({"status": "ok"})
+
+    # CHECK / LOOKS / NAME SEARCH
+    if any(cmd in lower for cmd in ["check", "who", "looks"]):
+        query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
+        matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
+        if matches:
+            for s in matches:
+                reply = f"🔴 **TIA RECORD** — {s['name']}\nDOB: {s.get('dob')}\nDescriptors: {s.get('descriptors','None')}\nRisk: {s.get('risk','Medium')}\nHistory:\n{s.get('history','No history')}"
+                send_message(reply, s.get('photo_url'))
+        else:
+            send_message(f"🔴 No match for '{query}'")
+        return jsonify({"status": "ok"})
+
+    # LOCATION / 10-20
+    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", "20"]):
+        query = text.lower()
+        for cmd in ["@tia", "10-20", "1020", "location", "property", "20"]:
+            query = query.replace(cmd, "").strip()
+        matches = [s for s in subjects if query in s.get('history','').lower()]
+        if matches:
+            reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n"
+            for s in matches:
+                reply += f"• {s['name']} | {s.get('descriptors','No desc')}\n"
+            send_message(reply)
+        else:
+            send_message(f"🔴 No subjects at '{query}'")
+        return jsonify({"status": "ok"})
+
+    # RISK UPDATE
+    if "risk" in lower:
+        parts = text.split()
+        try:
+            name = parts[1]
+            level = parts[2].capitalize()
+            for s in subjects:
+                if s['name'].lower() == name.lower():
+                    s['risk'] = level
+                    send_message(f"✅ Risk updated for {name} → {level}")
+                    save_db(subjects)
+                    return jsonify({"status": "ok"})
+        except:
+            pass
+        send_message("❌ Risk command: @TIA risk [Name] [High/Medium/Low]")
 
     save_db(subjects)
     return jsonify({"status": "ok"})
