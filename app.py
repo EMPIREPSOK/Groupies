@@ -66,13 +66,13 @@ def webhook():
         subjects.append(new_subject)
         save_db(subjects)
 
-        send_message(f"✅ **SUBJECT SAVED**\nName: {name}\nLocation: {location}\nTotal in DB: {len(subjects)}")
+        send_message(f"✅ **SUBJECT SAVED**\nName: {name}\nLocation: {location}\nTotal: {len(subjects)}")
         return jsonify({"status": "ok"})
 
-    # === LIST ALL ===
+    # === LIST ===
     if any(w in lower for w in ["list", "all", "show", "database"]):
         if subjects:
-            msg = f"📋 **TIA Database** ({len(subjects)} subjects):\n"
+            msg = f"📋 **TIA Database** ({len(subjects)} total):\n"
             for s in subjects:
                 msg += f"• {s['name']} | {s.get('descriptors','None')}\n"
         else:
@@ -80,20 +80,26 @@ def webhook():
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    # === LOCATION / 10-20 SEARCH ===
-    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property", " at "]) or ("20" in lower and len(text.split()) <= 6):
+    # === 10-20 / LOCATION SEARCH (Improved) ===
+    if any(cmd in lower for cmd in ["10-20", "1020", "location", "property"]) or lower.startswith("20 "):
         query = text.lower()
-        for cmd in ["@tia", "10-20", "1020", "location", "property", " at ", "check"]:
+        for cmd in ["@tia", "10-20", "1020", "location", "property", "check"]:
             query = query.replace(cmd, "").strip()
+        
         if query:
-            matches = [s for s in subjects if query in s.get('history','').lower() or query in s.get('last_seen','').lower()]
+            matches = []
+            for s in subjects:
+                history_lower = s.get('history', '').lower()
+                if query in history_lower or query in s.get('last_seen','').lower():
+                    matches.append(s)
+            
             if matches:
                 reply = f"🔴 **SUBJECTS AT {query.upper()}** ({len(matches)} found)\n\n"
                 for s in matches:
                     reply += f"• {s['name']} | {s.get('descriptors','No desc')}\n"
                 send_message(reply)
             else:
-                send_message(f"🔴 **TIA** — No subjects at '**{query}**'.")
+                send_message(f"🔴 **TIA** — No subjects found at '**{query}**'.")
             return jsonify({"status": "ok"})
 
     # === NAME / LOOKS CHECK ===
