@@ -7,7 +7,6 @@ app = Flask(__name__)
 BOT_ID = "0bd071f6a87fec9fcb76d39586"
 GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 
-# Initialize Database
 def init_db():
     conn = sqlite3.connect('tia_subjects.db')
     c = conn.cursor()
@@ -41,11 +40,12 @@ def webhook():
 
     reply = "🔴 **TIA ACTIVE** ✅\n\n"
 
-    if image_url or any(k in text for k in ["check", "tia", "who", "subject"]):
-        reply += "📸 Image or request received.\n"
+    if image_url or any(word in text for word in ["tia", "test", "check", "who", "subject", "photo"]):
+        reply += "✅ Received your message!\n"
         if image_url:
-            reply += f"Image URL: {image_url}\n\n"
-        reply += "Send details to add:\nName | DOB | Date | Location | Outcome"
+            reply += f"📸 Image attached\n"
+        reply += "\nSend subject details to add to database:\n"
+        reply += "Name: \nDOB: \nDate: \nLocation: \nOutcome: "
 
     send_message(reply)
     return jsonify({"status": "ok"})
