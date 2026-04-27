@@ -1,7 +1,7 @@
 import os
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from flask import Flask, request, jsonify
 import requests
 
@@ -10,11 +10,10 @@ app = Flask(__name__)
 BOT_ID = "0bd071f6a87fec9fcb76d39586"
 GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
-LAST_BACKUP_FILE = "last_backup.txt"
+BACKUP_FOLDER = "backups"
 
-# Email temporarily disabled due to Railway SMTP block
-# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-# etc.
+# Create backup folder
+os.makedirs(BACKUP_FOLDER, exist_ok=True)
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -28,19 +27,6 @@ def load_db():
 def save_db(data):
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=2)
-
-def get_last_backup_time():
-    if os.path.exists(LAST_BACKUP_FILE):
-        try:
-            with open(LAST_BACKUP_FILE, 'r') as f:
-                return datetime.fromisoformat(f.read().strip())
-        except:
-            pass
-    return datetime.now() - timedelta(days=10)
-
-def save_last_backup_time():
-    with open(LAST_BACKUP_FILE, 'w') as f:
-        f.write(datetime.now().isoformat())
 
 def send_message(text, image_url=None):
     payload = {"bot_id": BOT_ID, "text": text}
@@ -61,7 +47,7 @@ def webhook():
 
     subjects = load_db()
 
-    # === MANUAL JSON BACKUP (always works) ===
+    # ====================== BACKUP ======================
     if any(cmd in lower for cmd in ["backup", "export"]):
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         backup_data = {
@@ -69,13 +55,21 @@ def webhook():
             "total_subjects": len(subjects),
             "subjects": subjects
         }
-        backup_json = json.dumps(backup_data, indent=2)
-        send_message(f"✅ **TIA BACKUP v2.4**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n```json\n{backup_json}\n```")
-        save_last_backup_time()
+        
+        # Save full backup file
+        backup_path = f"{BACKUP_FOLDER}/tia_backup_{timestamp}.json"
+        with open(backup_path, 'w') as f:
+            json.dump(backup_data, f, indent=2)
+
+        # Short message in chat with download instructions
+        msg = f"✅ **TIA BACKUP v2.5**\nGenerated: {timestamp}\nTotal Subjects: {len(subjects)}\n\n"
+        msg += "📥 Full backup saved on server.\n"
+        msg += "To download: Go to Railway → Your Service → Files → backups folder → click the file."
+        send_message(msg)
         return jsonify({"status": "ok"})
 
-    # ====================== CORE TIA COMMANDS ======================
-    # ADD / NEW INCIDENT
+    # ====================== CORE COMMANDS ======================
+    # ADD NEW SUBJECT / INCIDENT
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
