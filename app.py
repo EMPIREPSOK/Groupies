@@ -2,7 +2,6 @@ import os
 import json
 import uuid
 from datetime import datetime
-import resend
 import requests
 from flask import Flask, request, jsonify
 
@@ -13,11 +12,6 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 GROUP_ID = "108389282"
 GROUPME_TOKEN = "4e7a8ed0248a013f530b5ac23cb6c257"
-
-resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <security@ee15.net>")
-
-TOPIC_NAME = "EPS Trespassed Subjects"
 
 def load_db():
     if os.path.exists(DB_FILE):
@@ -47,26 +41,17 @@ def webhook():
     text = data.get('text', '').strip()
     lower = text.lower()
 
-    # ONLY RESPOND IN THE TOPIC
-    if TOPIC_NAME.lower() not in lower and "@tia" not in lower:
-        return jsonify({"status": "ok"})
-
     subjects = load_db()
 
-    # IMPORT HISTORY
+    # TEST IMPORT
     if "import" in lower and "history" in lower:
-        send_message("🔄 Starting full import from **EPS Trespassed Subjects** topic...")
+        send_message("🔄 Starting import... Pulling last 100 messages from the group.")
         imported = import_chat_history(subjects)
         save_db(subjects)
-        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} subjects/incidents with photos.")
+        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} subjects/incidents.")
         return jsonify({"status": "ok"})
 
-    # BACKUP
-    if any(cmd in lower for cmd in ["backup", "export"]):
-        send_message("✅ **TIA BACKUP** — Email feature ready")
-        return jsonify({"status": "ok"})
-
-    # ADD NEW SUBJECT / INCIDENT
+    # ADD NEW SUBJECT
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
@@ -79,12 +64,14 @@ def webhook():
             if "outcome:" in l: outcome = line.split(":", 1)[1].strip()
 
         existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
+        photo_url = None
+        if data.get('attachments'):
+            photo_url = data['attachments'][0].get('url')
+
         if existing:
             new_entry = f"{date} - {location} - {outcome}"
             existing['history'] = existing.get('history', '') + f"\n• {new_entry}"
-            existing['last_seen'] = date
-            if data.get('attachments'):
-                existing['photo_url'] = data['attachments'][0].get('url')
+            if photo_url: existing['photo_url'] = photo_url
             send_message(f"✅ **NEW INCIDENT ADDED** for {name}")
         else:
             new_subject = {
@@ -94,7 +81,7 @@ def webhook():
                 "descriptors": descriptors,
                 "history": f"{date} - {location} - {outcome}",
                 "last_seen": date,
-                "photo_url": data.get('attachments')[0].get('url') if data.get('attachments') else None,
+                "photo_url": photo_url,
                 "risk": "Medium"
             }
             subjects.append(new_subject)
@@ -105,22 +92,11 @@ def webhook():
 
     # LIST
     if "list" in lower:
-        msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']} | Risk: {s.get('risk','Medium')}" for s in subjects) or "Empty")
+        msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']}" for s in subjects) or "Empty")
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    # CHECK / LOOKS
-    if any(cmd in lower for cmd in ["check", "who", "looks"]):
-        query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
-        matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
-        if matches:
-            for s in matches:
-                reply = f"🔴 **TIA RECORD** — {s['name']}\nDOB: {s.get('dob')}\nDescriptors: {s.get('descriptors','None')}\nRisk: {s.get('risk','Medium')}\nHistory:\n{s.get('history','No history')}"
-                send_message(reply, s.get('photo_url'))
-        else:
-            send_message(f"🔴 No match for '{query}'")
-        return jsonify({"status": "ok"})
-
+    send_message("✅ TIA is active in this topic.")
     save_db(subjects)
     return jsonify({"status": "ok"})
 
@@ -128,12 +104,15 @@ def import_chat_history(subjects):
     count = 0
     try:
         r = requests.get(f"https://api.groupme.com/v3/groups/{GROUP_ID}/messages?token={GROUPME_TOKEN}&limit=100")
-        for msg in r.json()['response']['messages']:
+        messages = r.json()['response']['messages']
+
+        for msg in reversed(messages):   # oldest first
             if not msg.get('text'): continue
             txt = msg['text']
             lower_txt = txt.lower()
+
             if any(k in lower_txt for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
-                # same parsing as above...
+                # parsing code (same as above)
                 name = dob = descriptors = date = location = outcome = "Unknown"
                 for line in txt.splitlines():
                     l = line.lower()
@@ -150,19 +129,27 @@ def import_chat_history(subjects):
                         if att.get('type') == 'image':
                             photo_url = att.get('url')
 
+                # Add or update
                 existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
                 if existing:
-                    new_entry = f"{date} - {location} - {outcome}"
-                    existing['history'] = existing.get('history', '') + f"\n• {new_entry}"
+                    existing['history'] = existing.get('history', '') + f"\n• {date} - {location} - {outcome}"
                     if photo_url: existing['photo_url'] = photo_url
                 else:
-                    new_subject = {"id": str(uuid.uuid4())[:8], "name": name, "dob": dob, "descriptors": descriptors,
-                                   "history": f"{date} - {location} - {outcome}", "last_seen": date,
-                                   "photo_url": photo_url, "risk": "Medium"}
+                    new_subject = {
+                        "id": str(uuid.uuid4())[:8],
+                        "name": name,
+                        "dob": dob,
+                        "descriptors": descriptors,
+                        "history": f"{date} - {location} - {outcome}",
+                        "last_seen": date,
+                        "photo_url": photo_url,
+                        "risk": "Medium"
+                    }
                     subjects.append(new_subject)
                 count += 1
         return count
-    except:
+    except Exception as e:
+        print("Import error:", str(e))
         return 0
 
 if __name__ == '__main__':
