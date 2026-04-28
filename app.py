@@ -41,14 +41,18 @@ def webhook():
     text = data.get('text', '').strip()
     lower = text.lower()
 
+    # ONLY RESPOND WHEN MENTIONED
+    if "@tia" not in lower:
+        return jsonify({"status": "ok"})   # ← This stops the spam
+
     subjects = load_db()
 
-    # TEST IMPORT
+    # IMPORT
     if "import" in lower and "history" in lower:
-        send_message("🔄 Starting import from group...")
+        send_message("🔄 Starting import... (last 100 messages)")
         imported = import_chat_history(subjects)
         save_db(subjects)
-        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} entries.")
+        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} subjects.")
         return jsonify({"status": "ok"})
 
     # ADD NEW SUBJECT
@@ -63,11 +67,11 @@ def webhook():
             if "location:" in l: location = line.split(":", 1)[1].strip()
             if "outcome:" in l: outcome = line.split(":", 1)[1].strip()
 
-        existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
         photo_url = None
         if data.get('attachments'):
             photo_url = data['attachments'][0].get('url')
 
+        existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
         if existing:
             new_entry = f"{date} - {location} - {outcome}"
             existing['history'] = existing.get('history', '') + f"\n• {new_entry}"
@@ -90,24 +94,13 @@ def webhook():
         save_db(subjects)
         return jsonify({"status": "ok"})
 
-    # BASIC COMMANDS
+    # LIST
     if "list" in lower:
         msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']}" for s in subjects) or "Empty")
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    if any(cmd in lower for cmd in ["check", "who", "looks"]):
-        query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
-        matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
-        if matches:
-            for s in matches:
-                reply = f"🔴 **TIA RECORD** — {s['name']}\nHistory:\n{s.get('history','No history')}"
-                send_message(reply, s.get('photo_url'))
-        else:
-            send_message(f"🔴 No match for '{query}'")
-        return jsonify({"status": "ok"})
-
-    send_message("✅ TIA is active.")
+    send_message("✅ TIA is ready.\nCommands: @TIA import history, @TIA list, Name: ... etc.")
     save_db(subjects)
     return jsonify({"status": "ok"})
 
@@ -120,44 +113,10 @@ def import_chat_history(subjects):
             txt = msg['text']
             lower_txt = txt.lower()
             if any(k in lower_txt for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
-                # parsing logic (same as before)
+                # parsing (same as before)
                 name = dob = descriptors = date = location = outcome = "Unknown"
                 for line in txt.splitlines():
                     l = line.lower()
                     if "name:" in l: name = line.split(":", 1)[1].strip()
                     if "dob:" in l: dob = line.split(":", 1)[1].strip()
-                    if any(d in l for d in ["descriptors:", "descriptor:"]): descriptors = line.split(":", 1)[1].strip()
-                    if "date:" in l: date = line.split(":", 1)[1].strip()
-                    if "location:" in l: location = line.split(":", 1)[1].strip()
-                    if "outcome:" in l: outcome = line.split(":", 1)[1].strip()
-
-                photo_url = None
-                if msg.get('attachments'):
-                    for att in msg['attachments']:
-                        if att.get('type') == 'image':
-                            photo_url = att.get('url')
-
-                existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
-                if existing:
-                    existing['history'] = existing.get('history', '') + f"\n• {date} - {location} - {outcome}"
-                    if photo_url: existing['photo_url'] = photo_url
-                else:
-                    new_subject = {
-                        "id": str(uuid.uuid4())[:8],
-                        "name": name,
-                        "dob": dob,
-                        "descriptors": descriptors,
-                        "history": f"{date} - {location} - {outcome}",
-                        "last_seen": date,
-                        "photo_url": photo_url,
-                        "risk": "Medium"
-                    }
-                    subjects.append(new_subject)
-                count += 1
-        return count
-    except:
-        return 0
-
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
+                    if any(d in l for d in ["descriptors:", "descriptor:"]): descriptors = line.split(":", 1)[
