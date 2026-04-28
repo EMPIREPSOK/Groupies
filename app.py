@@ -12,8 +12,8 @@ BOT_ID = "0bd071f6a87fec9fcb76d39586"
 GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 
-# Official Resend setup
-resend.api_key = os.getenv("re_aqnMtqF9_KGtymoPXPnrz3CpfEejT3apV")
+# Resend Setup
+resend.api_key = os.getenv("RESEND_API_KEY")
 FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <security@ee15.net>")
 
 def load_db():
@@ -36,6 +36,9 @@ def send_message(text, image_url=None):
     requests.post(GROUPME_POST_URL, json=payload)
 
 def send_email_backup():
+    if not resend.api_key:
+        return "❌ RESEND_API_KEY not set in Railway"
+
     subjects = load_db()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
     backup_data = {
@@ -46,22 +49,22 @@ def send_email_backup():
     backup_json = json.dumps(backup_data, indent=2)
 
     try:
-        r = resend.Emails.send({
+        resend.Emails.send({
             "from": FROM_EMAIL,
-            "to": "empirepsok@gmail.com",
+            "to": "security@ee15.net",
             "subject": f"TIA Backup - {timestamp}",
             "html": f"""
                 <h2>TIA Full Database Backup</h2>
                 <p><strong>Generated:</strong> {timestamp}</p>
                 <p><strong>Total Subjects:</strong> {len(subjects)}</p>
-                <p>Full backup attached as JSON file.</p>
+                <p>Full backup attached below.</p>
             """,
             "attachments": [{
                 "filename": f"tia_backup_{timestamp}.json",
                 "content": backup_json
             }]
         })
-        return f"✅ Backup emailed successfully"
+        return f"✅ Backup emailed to security@ee15.net"
     except Exception as e:
         return f"❌ Email failed: {str(e)}"
 
@@ -78,13 +81,13 @@ def webhook():
 
     subjects = load_db()
 
-    # BACKUP
+    # === BACKUP ===
     if any(cmd in lower for cmd in ["backup", "export"]):
         status = send_email_backup()
         send_message(f"✅ **TIA BACKUP v2.6**\n{status}\nTotal Subjects: {len(subjects)}")
         return jsonify({"status": "ok"})
 
-    # ADD / NEW INCIDENT
+    # === ADD NEW SUBJECT / INCIDENT ===
     if any(k in lower for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
         name = dob = descriptors = date = location = outcome = "Unknown"
         for line in text.splitlines():
