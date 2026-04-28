@@ -13,8 +13,8 @@ GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
 DB_FILE = "tia_subjects.json"
 
 # Official Resend setup
-resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <onboarding@resend.dev>")
+resend.api_key = os.getenv("re_aqnMtqF9_KGtymoPXPnrz3CpfEejT3apV")
+FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL", "TIA <security@ee15.net>")
 
 def load_db():
     if os.path.exists(DB_FILE):
