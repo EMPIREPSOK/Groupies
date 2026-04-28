@@ -44,8 +44,11 @@ def webhook():
 
     text = data.get('text', '').strip()
     lower = text.lower()
-    attachments = data.get('attachments', [])
-    image_url = attachments[0]['url'] if attachments and attachments[0].get('type') == 'image' else None
+
+    # === ONLY RESPOND IN SPECIFIC TOPIC ===
+    # Change "trespass" to whatever your topic name is
+    if "EPS Trespassed Subjects" not in lower and "@tia" not in lower:
+        return jsonify({"status": "ok"})   # Ignore messages outside the topic
 
     subjects = load_db()
 
