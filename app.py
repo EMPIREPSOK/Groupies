@@ -45,10 +45,10 @@ def webhook():
 
     # TEST IMPORT
     if "import" in lower and "history" in lower:
-        send_message("🔄 Starting import... Pulling last 100 messages from the group.")
+        send_message("🔄 Starting import from group...")
         imported = import_chat_history(subjects)
         save_db(subjects)
-        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} subjects/incidents.")
+        send_message(f"✅ **IMPORT COMPLETE**\nImported {imported} entries.")
         return jsonify({"status": "ok"})
 
     # ADD NEW SUBJECT
@@ -90,13 +90,24 @@ def webhook():
         save_db(subjects)
         return jsonify({"status": "ok"})
 
-    # LIST
+    # BASIC COMMANDS
     if "list" in lower:
         msg = "📋 **TIA Database**:\n" + ("\n".join(f"• {s['name']}" for s in subjects) or "Empty")
         send_message(msg)
         return jsonify({"status": "ok"})
 
-    send_message("✅ TIA is active in this topic.")
+    if any(cmd in lower for cmd in ["check", "who", "looks"]):
+        query = lower.replace("@tia", "").replace("check", "").replace("who", "").replace("looks", "").strip()
+        matches = [s for s in subjects if query in s.get('name','').lower() or query in s.get('descriptors','').lower()]
+        if matches:
+            for s in matches:
+                reply = f"🔴 **TIA RECORD** — {s['name']}\nHistory:\n{s.get('history','No history')}"
+                send_message(reply, s.get('photo_url'))
+        else:
+            send_message(f"🔴 No match for '{query}'")
+        return jsonify({"status": "ok"})
+
+    send_message("✅ TIA is active.")
     save_db(subjects)
     return jsonify({"status": "ok"})
 
@@ -104,15 +115,12 @@ def import_chat_history(subjects):
     count = 0
     try:
         r = requests.get(f"https://api.groupme.com/v3/groups/{GROUP_ID}/messages?token={GROUPME_TOKEN}&limit=100")
-        messages = r.json()['response']['messages']
-
-        for msg in reversed(messages):   # oldest first
+        for msg in r.json()['response']['messages']:
             if not msg.get('text'): continue
             txt = msg['text']
             lower_txt = txt.lower()
-
             if any(k in lower_txt for k in ["name:", "dob:", "date:", "location:", "outcome:"]):
-                # parsing code (same as above)
+                # parsing logic (same as before)
                 name = dob = descriptors = date = location = outcome = "Unknown"
                 for line in txt.splitlines():
                     l = line.lower()
@@ -129,7 +137,6 @@ def import_chat_history(subjects):
                         if att.get('type') == 'image':
                             photo_url = att.get('url')
 
-                # Add or update
                 existing = next((s for s in subjects if s.get('name','').lower() == name.lower()), None)
                 if existing:
                     existing['history'] = existing.get('history', '') + f"\n• {date} - {location} - {outcome}"
@@ -148,8 +155,7 @@ def import_chat_history(subjects):
                     subjects.append(new_subject)
                 count += 1
         return count
-    except Exception as e:
-        print("Import error:", str(e))
+    except:
         return 0
 
 if __name__ == '__main__':
