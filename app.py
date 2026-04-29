@@ -30,31 +30,26 @@ def webhook():
         send_message("📸 Post a clear photo of the person + @Fox check")
         return jsonify({"status": "ok"})
 
-    send_message("🔍 **Fox is hunting this unknown person...**\nMugshots • Arrest records • Social media • News • Reverse image")
+    send_message("🔍 **Fox is hunting...** Using facesearch.arrests.org + multiple sources")
 
-    response = f"""🧪 **Fox Identification Results** (Unknown Person in the Wild)
+    response = f"""🧪 **Fox Identification Results** (Unknown Person)
 
-**Top Recommended Searches (Click these):**
+**1. facesearch.arrests.org** (Your recommended free tool)
+→ [Upload this photo directly here](https://facesearch.arrests.org/)
 
-• **[Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})** ← **Best starting point for faces & mugshots**
-• **[Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})**
-• **[TinEye Reverse Image](https://tineye.com/search?url={image_url})**
+**2. Best Reverse Image Searches (Click these):**
+• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Highly Recommended**
+• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
+• [TinEye](https://tineye.com/search?url={image_url})
 
-**Mugshot & Arrest Databases:**
-• [FaceSearch Arrests](https://facesearch.arrests.org/)
-• [FaceCheck.ID Style Search](https://facecheck.id/)
+**3. Additional Mugshot Tools:**
+• [FaceCheck.ID](https://facecheck.id/)
 • [Mugshots.com](https://mugshots.com/)
 
-**Social Media & People Search:**
-• [Pipl People Search](https://pipl.com/)
-• [Social Catfish](https://socialcatfish.com/)
+**Quick Tip:**  
+Open the facesearch.arrests.org link above and upload the photo directly — it’s extremely good for mugshots as you said.
 
-**Pro Tips for Better Results:**
-- Use the **Yandex link first** — it often finds social media profiles and news articles
-- Try zooming in on the face before uploading
-- Run multiple tools — they each catch different things
-
-Send another photo or clearer angle if needed. Fox will keep getting stronger."""
+Send another photo or clearer angle if needed."""
 
     send_message(response)
     return jsonify({"status": "ok"})
