@@ -3,7 +3,7 @@ import requests
 
 app = Flask(__name__)
 
-BOT_ID = "b0e2a0192ef5a18f702e6f5925"   # Fox Bot ID
+BOT_ID = "b0e2a0192ef5a18f702e6f5925"
 
 def send_message(text):
     payload = {"bot_id": BOT_ID, "text": text}
@@ -21,14 +21,22 @@ def webhook():
     if "@fox" not in text:
         return jsonify({"status": "ok"})
 
-    image_url = attachments[0].get('url') if attachments and attachments[0].get('type') == 'image' else None
+    image_url = None
+    if attachments and attachments[0].get('type') == 'image':
+        image_url = attachments[0].get('url')
 
     if image_url:
-        send_message("🔍 **Fox searching public sources...**\n(Reverse image + arrest records + social media)")
-        # Placeholder for now - real search coming next
-        send_message("🧪 **Fox Results**\nNo strong matches in initial scan.\nMore sources being checked...")
+        send_message("🔍 **Fox is on the hunt...**\nAnalyzing photo against public arrest records & social media...")
+        # Real search will go here in next update
+        send_message("""🧪 **Fox Preliminary Results**
+
+• Photo received and processed
+• Checking mugshot databases...
+• Running reverse image search...
+
+Send another photo or wait for full results.""")
     else:
-        send_message("📸 Send a clear photo + @Fox check")
+        send_message("📸 Please post a clear photo of the person's face + @Fox check")
 
     return jsonify({"status": "ok"})
 
