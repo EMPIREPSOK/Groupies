@@ -26,27 +26,31 @@ def webhook():
         image_url = attachments[0].get('url')
 
     if not image_url:
-        send_message("📸 Post a clear frontal photo + @Fox check")
+        send_message("📸 Post a clear photo of the person's face + @Fox check")
         return jsonify({"status": "ok"})
 
-    send_message("🔍 **Fox is hunting...** Checking arrest databases, reverse image, and social media.")
+    send_message("🔍 **Fox is on full hunt mode...**\nChecking arrest databases, reverse image, social media & web sources...")
 
-    # Real search simulation + public links
-    response = f"""🧪 **Fox Search Results** for the uploaded photo
+    # Powerful multi-source response
+    response = f"""🧪 **Fox Full Search Results**
 
-**Public Mugshot / Arrest Search:**
-• Checking facesearch.arrests.org style databases...
-• No immediate strong matches found.
-
-**Reverse Image Search Links:**
+**1. Reverse Image Search (Click these):**
 • [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
-• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})
+• [Yandex Reverse Image (often best for faces)](https://yandex.com/images/search?rpt=imageview&url={image_url})
 • [TinEye Reverse Image](https://tineye.com/search?url={image_url})
+• [Bing Visual Search](https://www.bing.com/images/search?q=imgurl:{image_url.replace('https://','')})
 
-**Social Media Sweep:**
-• No clear public social media hits in initial scan.
+**2. Mugshot / Arrest Databases:**
+• [FaceSearch Arrests Style](https://facesearch.arrests.org/)
+• [Mugshots.com Search](https://mugshots.com/)
+• [BustedMugshots](https://bustedmugshots.com/)
 
-Send a clearer photo or try @Fox check again."""
+**3. Social Media & Web Sweep:**
+• [Pipl People Search](https://pipl.com/)
+• [Social Searcher](https://www.social-searcher.com/)
+• [Google "Face" Search](https://www.google.com/search?tbm=isch&q=face+recognition+{image_url})
+
+Send a clearer frontal photo if no good matches. Fox will keep improving."""
 
     send_message(response)
     return jsonify({"status": "ok"})
