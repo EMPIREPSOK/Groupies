@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import requests
 import re
 
 app = Flask(__name__)
@@ -23,31 +22,39 @@ def webhook():
     if "@fox" not in lower:
         return jsonify({"status": "ok"})
 
-    # Extract any Facebook link
-    fb_link = None
-    fb_match = re.search(r'(https?://[^\s]+facebook\.com[^\s]+|https?://[^\s]+fb\.com[^\s]+)', text)
-    if fb_match:
-        fb_link = fb_match.group(0)
+    fb_link = re.search(r'https?://[^\s]*facebook\.com[^\s]*', text)
+    fb_link = fb_link.group(0) if fb_link else None
 
     image_url = None
     if attachments and attachments[0].get('type') == 'image':
         image_url = attachments[0].get('url')
 
     if image_url:
-        send_message("🔍 **Fox is hunting the photo...**")
-        response = f"""🧪 **Fox Photo Analysis**
+        send_message("🔍 **Fox analyzing photo from mugshot page...**")
+        send_message(f"""🧪 **Fox Results**
 
-**Reverse Image Links:**
-• [Google](https://www.google.com/searchbyimage?image_url={image_url})
-• [Yandex (Best for faces)](https://yandex.com/images/search?rpt=imageview&url={image_url})
+**Reverse Image Search (Best for Mugshots):**
+• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Recommended first**
+• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
 • [TinEye](https://tineye.com/search?url={image_url})
 
-Try these links for best results."""
+Try these links — they work well on mugshots.""")
 
     elif fb_link:
-        send_message(f"🔍 **Fox detected Facebook link:**\n{fb_link}\n\nFox can't access private Facebook posts directly.\n\n**Recommended:** Open the link → take a screenshot of the person's face → post the screenshot here with @Fox check")
+        send_message(f"""🔍 **Fox detected Mugshot Facebook Page:**
+
+{fb_link}
+
+**Best Workflow for Mugshot Pages:**
+1. Open the Facebook link
+2. Find the person you want to identify
+3. Take a **clear screenshot** of their face (zoom in if needed)
+4. Post the screenshot here with `@Fox check`
+
+Fox will then run strong reverse image searches on it.""")
+
     else:
-        send_message("📸 Post a photo or a Facebook link + @Fox check")
+        send_message("📸 Post a screenshot from the mugshot page + @Fox check")
 
     return jsonify({"status": "ok"})
 
