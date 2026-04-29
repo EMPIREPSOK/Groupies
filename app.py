@@ -1,15 +1,13 @@
-import os
-import requests
 from flask import Flask, request, jsonify
+import requests
 
 app = Flask(__name__)
 
-BOT_ID = "b0e2a0192ef5a18f702e6f5925"   # ← Fox Bot ID
-GROUPME_POST_URL = "https://api.groupme.com/v3/bots/post"
+BOT_ID = "b0e2a0192ef5a18f702e6f5925"   # Fox Bot ID
 
 def send_message(text):
     payload = {"bot_id": BOT_ID, "text": text}
-    requests.post(GROUPME_POST_URL, json=payload)
+    requests.post("https://api.groupme.com/v3/bots/post", json=payload)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -17,35 +15,21 @@ def webhook():
     if not data or data.get('sender_type') == 'bot':
         return jsonify({"status": "ok"})
 
-    text = data.get('text', '').strip()
-    lower = text.lower()
+    text = data.get('text', '').strip().lower()
     attachments = data.get('attachments', [])
 
-    # Only respond when mentioned
-    if "@fox" not in lower:
+    if "@fox" not in text:
         return jsonify({"status": "ok"})
 
-    image_url = None
-    if attachments and attachments[0].get('type') == 'image':
-        image_url = attachments[0].get('url')
+    image_url = attachments[0].get('url') if attachments and attachments[0].get('type') == 'image' else None
 
-    if not image_url:
-        send_message("📸 Post a clear photo of the person + @Fox check")
-        return jsonify({"status": "ok"})
+    if image_url:
+        send_message("🔍 **Fox searching public sources...**\n(Reverse image + arrest records + social media)")
+        # Placeholder for now - real search coming next
+        send_message("🧪 **Fox Results**\nNo strong matches in initial scan.\nMore sources being checked...")
+    else:
+        send_message("📸 Send a clear photo + @Fox check")
 
-    send_message("🔍 **Fox is searching** public sources and arrest databases for this person...\nThis may take 10-20 seconds.")
-
-    # Basic placeholder response (we'll expand with real search next)
-    send_message("""🧪 **Fox Search Results**
-
-No strong public matches found in initial scan.
-
-• Reverse image search running...
-• Arrest database check running...
-• Social media & web search running...
-
-Send another photo or type @Fox help for commands.""")
-    
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
