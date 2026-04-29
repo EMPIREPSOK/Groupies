@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import requests   # ← This was missing
 
 app = Flask(__name__)
 
@@ -25,29 +26,20 @@ def webhook():
     if attachments and attachments[0].get('type') == 'image':
         image_url = attachments[0].get('url')
 
-    if not image_url:
-        send_message("📸 Post a clear photo of the person + @Fox check")
-        return jsonify({"status": "ok"})
+    if image_url:
+        send_message("🔍 **Fox is hunting this unknown person...**")
+        send_message(f"""🧪 **Fox Results**
 
-    send_message("🔍 **Fox is hunting this unknown person...**")
-
-    response = f"""🧪 **Fox Results** (Unknown Person)
-
-**Top Recommended Tools (Click these):**
-
-• **[Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})** ← **Best starting point**
-• **[Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})**
-• **[TinEye Reverse Image](https://tineye.com/search?url={image_url})**
+**Best Tools (Click these):**
+• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Start Here**
+• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
+• [TinEye](https://tineye.com/search?url={image_url})
 
 **Mugshot Database:**
-• [facesearch.arrests.org](https://facesearch.arrests.org/) ← Upload the photo directly here
+• [facesearch.arrests.org](https://facesearch.arrests.org/) ← Upload photo directly here""")
+    else:
+        send_message("📸 Post a clear photo of the person + @Fox check")
 
-**Quick Tip:**  
-Start with **Yandex**, then try facesearch.arrests.org. These are the ones that work best for you.
-
-Send another photo or clearer angle if needed."""
-
-    send_message(response)
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
