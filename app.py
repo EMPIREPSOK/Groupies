@@ -25,34 +25,33 @@ def webhook():
     if attachments and attachments[0].get('type') == 'image':
         image_url = attachments[0].get('url')
 
-    if not image_url:
-        send_message("📸 Post a clear photo of the person's face + @Fox check")
-        return jsonify({"status": "ok"})
+    # Handle Facebook / external links
+    link = None
+    if "facebook.com" in text or "fb.com" in text:
+        for word in text.split():
+            if "facebook.com" in word or "fb.com" in word:
+                link = word
+                break
 
-    send_message("🔍 **Fox is on full hunt mode...**\nChecking arrest databases, reverse image, social media & web sources...")
+    if image_url:
+        send_message("🔍 **Fox hunting...** Analyzing uploaded photo + any links.")
+        response = f"""🧪 **Fox Results**
 
-    # Powerful multi-source response
-    response = f"""🧪 **Fox Full Search Results**
+**Uploaded Photo:**
+• Reverse searches ready:
+• [Google](https://www.google.com/searchbyimage?image_url={image_url})
+• [Yandex (Best for faces)](https://yandex.com/images/search?rpt=imageview&url={image_url})
 
-**1. Reverse Image Search (Click these):**
-• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
-• [Yandex Reverse Image (often best for faces)](https://yandex.com/images/search?rpt=imageview&url={image_url})
-• [TinEye Reverse Image](https://tineye.com/search?url={image_url})
-• [Bing Visual Search](https://www.bing.com/images/search?q=imgurl:{image_url.replace('https://','')})
+**Facebook Link Detected:**
+• {link if link else 'None'}
+• Opening in browser recommended for manual check."""
 
-**2. Mugshot / Arrest Databases:**
-• [FaceSearch Arrests Style](https://facesearch.arrests.org/)
-• [Mugshots.com Search](https://mugshots.com/)
-• [BustedMugshots](https://bustedmugshots.com/)
+    elif link:
+        send_message(f"🔍 **Fox checking Facebook link:**\n{link}\n\nFox can't access private FB posts directly. Open the link and post a screenshot/photo for full analysis.")
+    else:
+        send_message("📸 Post a photo or Facebook link + @Fox check")
 
-**3. Social Media & Web Sweep:**
-• [Pipl People Search](https://pipl.com/)
-• [Social Searcher](https://www.social-searcher.com/)
-• [Google "Face" Search](https://www.google.com/search?tbm=isch&q=face+recognition+{image_url})
-
-Send a clearer frontal photo if no good matches. Fox will keep improving."""
-
-    send_message(response)
+    send_message(response if 'response' in locals() else "Fox is ready.")
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
