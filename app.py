@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import re
 
 app = Flask(__name__)
 
@@ -30,24 +29,21 @@ def webhook():
         send_message("📸 Post a clear photo of the person + @Fox check")
         return jsonify({"status": "ok"})
 
-    send_message("🔍 **Fox is hunting...** Using facesearch.arrests.org + multiple sources")
+    send_message("🔍 **Fox is hunting this unknown person...**")
 
-    response = f"""🧪 **Fox Identification Results** (Unknown Person)
+    response = f"""🧪 **Fox Results** (Unknown Person)
 
-**1. facesearch.arrests.org** (Your recommended free tool)
-→ [Upload this photo directly here](https://facesearch.arrests.org/)
+**Top Recommended Tools (Click these):**
 
-**2. Best Reverse Image Searches (Click these):**
-• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Highly Recommended**
-• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
-• [TinEye](https://tineye.com/search?url={image_url})
+• **[Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})** ← **Best starting point**
+• **[Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})**
+• **[TinEye Reverse Image](https://tineye.com/search?url={image_url})**
 
-**3. Additional Mugshot Tools:**
-• [FaceCheck.ID](https://facecheck.id/)
-• [Mugshots.com](https://mugshots.com/)
+**Mugshot Database:**
+• [facesearch.arrests.org](https://facesearch.arrests.org/) ← Upload the photo directly here
 
 **Quick Tip:**  
-Open the facesearch.arrests.org link above and upload the photo directly — it’s extremely good for mugshots as you said.
+Start with **Yandex**, then try facesearch.arrests.org. These are the ones that work best for you.
 
 Send another photo or clearer angle if needed."""
 
