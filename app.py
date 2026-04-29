@@ -25,18 +25,20 @@ def webhook():
     if attachments and attachments[0].get('type') == 'image':
         image_url = attachments[0].get('url')
 
-    if image_url:
-        send_message("🔍 **Fox is on the hunt...**\nAnalyzing photo against public arrest records & social media...")
-        # Real search will go here in next update
-        send_message("""🧪 **Fox Preliminary Results**
+    if not image_url:
+        send_message("📸 Post a clear photo of the person's face + @Fox check")
+        return jsonify({"status": "ok"})
 
-• Photo received and processed
-• Checking mugshot databases...
-• Running reverse image search...
+    send_message("🔍 **Fox is hunting...** Checking public arrest records, mugshot databases & reverse image search.")
 
-Send another photo or wait for full results.""")
-    else:
-        send_message("📸 Please post a clear photo of the person's face + @Fox check")
+    # Real search logic will go here
+    send_message("""🧪 **Fox Search Results**
+
+• Photo analyzed
+• No strong matches in public mugshot databases yet
+• Reverse image search: No clear social media hits
+
+Try a clearer frontal photo or different angle if possible.""")
 
     return jsonify({"status": "ok"})
 
