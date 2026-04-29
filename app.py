@@ -30,31 +30,31 @@ def webhook():
         send_message("📸 Post a clear photo of the person + @Fox check")
         return jsonify({"status": "ok"})
 
-    send_message("🔍 **Fox is hunting this unknown person...** Checking mugshots, arrest records, social media & news sources.")
+    send_message("🔍 **Fox is hunting this unknown person...**\nMugshots • Arrest records • Social media • News • Reverse image")
 
-    response = f"""🧪 **Fox Identification Results** (Unknown Person)
+    response = f"""🧪 **Fox Identification Results** (Unknown Person in the Wild)
 
-**Best Tools for Mugshot / Wild Photo Search (Click these):**
+**Top Recommended Searches (Click these):**
 
-• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Start Here** (often finds social media best)
-• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
-• [TinEye](https://tineye.com/search?url={image_url})
+• **[Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})** ← **Best starting point for faces & mugshots**
+• **[Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})**
+• **[TinEye Reverse Image](https://tineye.com/search?url={image_url})**
 
-**Mugshot / Arrest Databases:**
+**Mugshot & Arrest Databases:**
 • [FaceSearch Arrests](https://facesearch.arrests.org/)
+• [FaceCheck.ID Style Search](https://facecheck.id/)
 • [Mugshots.com](https://mugshots.com/)
-• [BustedMugshots](https://bustedmugshots.com/)
 
 **Social Media & People Search:**
-• [Pipl](https://pipl.com/)
+• [Pipl People Search](https://pipl.com/)
 • [Social Catfish](https://socialcatfish.com/)
 
-**Tips for Better Results:**
-- Try zooming in on the face
-- Use frontal or side profile if possible
-- Run the Yandex link first — it's usually the strongest for real people
+**Pro Tips for Better Results:**
+- Use the **Yandex link first** — it often finds social media profiles and news articles
+- Try zooming in on the face before uploading
+- Run multiple tools — they each catch different things
 
-Send another photo if needed. Fox will keep getting stronger."""
+Send another photo or clearer angle if needed. Fox will keep getting stronger."""
 
     send_message(response)
     return jsonify({"status": "ok"})
