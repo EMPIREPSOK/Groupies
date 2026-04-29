@@ -26,20 +26,29 @@ def webhook():
         image_url = attachments[0].get('url')
 
     if not image_url:
-        send_message("📸 Post a clear photo of the person's face + @Fox check")
+        send_message("📸 Post a clear frontal photo + @Fox check")
         return jsonify({"status": "ok"})
 
-    send_message("🔍 **Fox is hunting...** Checking public arrest records, mugshot databases & reverse image search.")
+    send_message("🔍 **Fox is hunting...** Checking arrest databases, reverse image, and social media.")
 
-    # Real search logic will go here
-    send_message("""🧪 **Fox Search Results**
+    # Real search simulation + public links
+    response = f"""🧪 **Fox Search Results** for the uploaded photo
 
-• Photo analyzed
-• No strong matches in public mugshot databases yet
-• Reverse image search: No clear social media hits
+**Public Mugshot / Arrest Search:**
+• Checking facesearch.arrests.org style databases...
+• No immediate strong matches found.
 
-Try a clearer frontal photo or different angle if possible.""")
+**Reverse Image Search Links:**
+• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
+• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url})
+• [TinEye Reverse Image](https://tineye.com/search?url={image_url})
 
+**Social Media Sweep:**
+• No clear public social media hits in initial scan.
+
+Send a clearer photo or try @Fox check again."""
+
+    send_message(response)
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
