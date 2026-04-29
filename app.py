@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-import requests
 import re
 
 app = Flask(__name__)
@@ -23,41 +22,41 @@ def webhook():
     if "@fox" not in lower:
         return jsonify({"status": "ok"})
 
-    # Detect Facebook link
-    fb_link = None
-    fb_match = re.search(r'https?://[^\s]*facebook\.com[^\s]*', text)
-    if fb_match:
-        fb_link = fb_match.group(0)
-
     image_url = None
     if attachments and attachments[0].get('type') == 'image':
         image_url = attachments[0].get('url')
 
-    if image_url:
-        send_message("🔍 **Fox analyzing uploaded photo...**")
-        send_message(f"""🧪 **Fox Results**
+    if not image_url:
+        send_message("📸 Post a clear photo of the person + @Fox check")
+        return jsonify({"status": "ok"})
 
-**Reverse Image Search Links:**
-• [Yandex (Best for faces)](https://yandex.com/images/search?rpt=imageview&url={image_url})
-• [Google](https://www.google.com/searchbyimage?image_url={image_url})
-• [TinEye](https://tineye.com/search?url={image_url})""")
+    send_message("🔍 **Fox is hunting this unknown person...** Checking mugshots, arrest records, social media & news sources.")
 
-    elif fb_link:
-        send_message(f"""🔍 **Fox detected Mugshot Facebook Page:**
+    response = f"""🧪 **Fox Identification Results** (Unknown Person)
 
-{fb_link}
+**Best Tools for Mugshot / Wild Photo Search (Click these):**
 
-**Recommended Workflow:**
-1. Open the link
-2. Find the person
-3. Take a clear screenshot of their face
-4. Post the screenshot here with `@Fox check`
+• [Yandex Reverse Image](https://yandex.com/images/search?rpt=imageview&url={image_url}) ← **Start Here** (often finds social media best)
+• [Google Reverse Image](https://www.google.com/searchbyimage?image_url={image_url})
+• [TinEye](https://tineye.com/search?url={image_url})
 
-Fox will run strong reverse searches on the screenshot.""")
+**Mugshot / Arrest Databases:**
+• [FaceSearch Arrests](https://facesearch.arrests.org/)
+• [Mugshots.com](https://mugshots.com/)
+• [BustedMugshots](https://bustedmugshots.com/)
 
-    else:
-        send_message("📸 Post a photo or Facebook mugshot link + @Fox check")
+**Social Media & People Search:**
+• [Pipl](https://pipl.com/)
+• [Social Catfish](https://socialcatfish.com/)
 
+**Tips for Better Results:**
+- Try zooming in on the face
+- Use frontal or side profile if possible
+- Run the Yandex link first — it's usually the strongest for real people
+
+Send another photo if needed. Fox will keep getting stronger."""
+
+    send_message(response)
     return jsonify({"status": "ok"})
 
 if __name__ == '__main__':
