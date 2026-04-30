@@ -1,19 +1,23 @@
 from flask import Flask, request, jsonify
 import requests
+import os
 from datetime import datetime
 
 app = Flask(__name__)
 
-BOT_ID = "YOUR_EPS_ALERT_BOT_ID_HERE"   # ← Paste the new Bot ID here
+BOT_ID = "cbb5f000a40fc62c544c6767c6"   # ← Your 911 Bot ID
 
 def send_message(text):
     payload = {"bot_id": BOT_ID, "text": text}
     requests.post("https://api.groupme.com/v3/bots/post", json=payload)
 
-# Your properties to monitor
+# === YOUR PROPERTIES TO MONITOR ===
 PROPERTIES = [
-    "Knollwood", "Channel Six", "Empire", "EPS",
-    # Add all your apartment names here, one per line
+    "Knollwood",
+    "Channel Six",
+    "Empire",
+    "EPS",
+    # Add ALL your apartment complexes here
 ]
 
 @app.route('/webhook', methods=['POST'])
@@ -24,15 +28,15 @@ def webhook():
 
     text = data.get('text', '').strip().lower()
 
-    if "@alert" in text or "test" in text:
-        send_message("✅ **EPS Alert Bot is online**\nMonitoring Tulsa PD Live Calls + Local News for your properties.")
+    if "@911" in text or "test" in text:
+        send_message("🚨 **911 Alert Bot is ONLINE**\nMonitoring Tulsa PD Live Calls + Local News for your properties.")
 
     return jsonify({"status": "ok"})
 
-# Simple status check
+# Health check
 @app.route('/', methods=['GET'])
 def home():
-    return "EPS Alert Bot is running"
+    return "✅ 911 Alert Bot is running"
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8080))
